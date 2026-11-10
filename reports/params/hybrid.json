@@ -1,0 +1,9 @@
+{
+  "weights": {
+    "profile": 2.0,
+    "content": 2.0,
+    "cooc_lift": 0.25,
+    "als": 0.0
+  },
+  "cooc_lift_prior": 10
+}

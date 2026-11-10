@@ -1,0 +1,50 @@
+# Experiment settings (NOT simulation assumptions). Fixed before any model ran.
+
+split:
+  # Split on booking_ts (the moment a recommendation would be made).
+  # train: everything before val_start (all of 2024 + Q1 2025)
+  # val:   spring 2025          -> used for tuning
+  # test:  summer + fall 2025   -> sealed until the final evaluation (step 6)
+  val_start: "2025-04-01"
+  test_start: "2025-07-01"
+
+eval:
+  seed: 2026          # fixes which services are hidden in each partial cart
+  ks: [3, 5]
+  map_k: 5
+
+baselines:
+  # Shrinkage strength for profile popularity; picked on validation MAP@5.
+  profile_smoothing_grid: [5, 20, 50, 200]
+
+als:
+  # Grid searched on validation MAP@5 (added in step 3; split/eval settings unchanged).
+  # First grid was factors [8,16,32] x alpha [5,20,40]; its best point sat at the
+  # small edge (8, 5), so the grid was shifted to [4,8,16] x [1,5,20]. factors=32
+  # was dropped (slowest and worst).
+  factors: [4, 8, 16]
+  reg: [0.1, 1.0, 10.0]
+  alpha: [1, 5, 20]
+  iterations: 15
+  seed: 0
+  stability_seeds: [0, 1, 2]   # re-fit the chosen config to show init sensitivity
+
+content:
+  # Grid searched on validation MAP@5 over EMPTY carts (the job this model has).
+  k: [25, 50, 100, 200, 400, 800]
+  group_weightings:
+    equal: {}
+    core_x2: {home_size: 2.0, labor_only: 2.0, distance: 2.0}
+
+hybrid:
+  # Weight grid per component (only ratios matter). Selected on validation MAP@5.
+  weight_grid: [0, 0.25, 0.5, 1, 2]
+  cooc_lift_prior: 10      # pseudo-bookings shrinking P(j|i) toward P(j); fixed, not tuned
+  crossfit_seed: 7         # splits validation carts in two halves for an honest estimate
+
+final:
+  # Long-tail view: drop services bought in >= this share of training bookings
+  # from targets and candidates (fixed before the test set was opened).
+  head_min_attach: 0.20
+  # Final models are refit on train + val with the hyperparameters chosen on val.
+  refit_on_train_plus_val: true

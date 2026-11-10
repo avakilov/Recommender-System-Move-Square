@@ -1,0 +1,8 @@
+{
+  "k": 400,
+  "group_weights": {
+    "home_size": 2.0,
+    "labor_only": 2.0,
+    "distance": 2.0
+  }
+}

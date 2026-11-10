@@ -1,0 +1,354 @@
+# =============================================================================
+# assumptions.yaml — EVERY modelling assumption behind the SYNTHETIC dataset.
+#
+# All data produced from this file is synthetic. Numbers here are illustrative
+# choices or generic reasoning, NOT measurements of any real company. Nothing
+# here mirrors a real company's attach rates or co-purchase patterns.
+#
+# Format: every entry under `assumptions:` is a block with
+#   value:        the parameter(s) the generator reads
+#   source_type:  one of
+#                   public            - grounded in a public source (cite it)
+#                   generic_reasoning - common-sense reasoning, no data behind it
+#                   user_spec         - a design choice given in the project spec
+#                   illustrative      - an arbitrary number picked to make the
+#                                       simulation non-trivial; no claim to realism
+#   source:       where it comes from / why
+#   verified:     (required for `public`) has someone opened the source and
+#                 checked it says this? Unverified items are listed in the
+#                 data-quality report.
+#   used_by:      (optional) "documentation_only" if the generator ignores it
+#
+# FREEZE RULE: this file is frozen once model code (step 2+) has been run.
+# Do not retune it after seeing model results. A genuine bug fix must be logged
+# in CHANGELOG.md with the reason and the date.
+# =============================================================================
+
+meta:
+  dataset_name: synthetic-moving-bookings
+  version: 1
+  frozen: true    # frozen 2026-11-10 before step 2; log any change in CHANGELOG.md
+
+assumptions:
+
+  # ---------------------------------------------------------------- volume/time
+  simulation_window:
+    value: {start: "2024-01-01", end: "2025-12-31", target_bookings: 30000}
+    source_type: illustrative
+    source: Two years so the test period can be a later, different-season slice.
+
+  monthly_move_weights:
+    # share of moves by calendar month (Jan..Dec); sums to 1
+    value: [0.055, 0.055, 0.070, 0.080, 0.095, 0.120, 0.120, 0.115, 0.085, 0.075, 0.065, 0.065]
+    source_type: public
+    source: >-
+      Public moving-cost guides commonly describe May-September as peak moving
+      season. The shape is qualitative; the exact numbers are illustrative.
+    verified: false
+
+  bookings_per_customer:
+    value: {1: 0.92, 2: 0.07, 3: 0.01}
+    source_type: user_spec
+    source: Spec says most customers book only once, so cold start is the norm.
+
+  repeat_gap_days:
+    value: {min_days: 120, extra_mean_days: 240}
+    source_type: generic_reasoning
+    source: People rarely move twice within a few months. Gap = min + Exponential(mean).
+
+  # ---------------------------------------------------------------- segments
+  hidden_segments:
+    # Hidden from every model. Shares drift linearly from share_start to
+    # share_end across the window; season_multipliers reweight by move season.
+    # home_size probs: [studio, 1br, 2br, 3br, 4br_plus]
+    # distance probs:  [local, regional, long_distance]
+    value:
+      budget_diy:
+        share_start: 0.28
+        share_end: 0.24
+        home_size: [0.15, 0.30, 0.30, 0.18, 0.07]
+        distance: [0.80, 0.15, 0.05]
+        labor_only_prob: 0.20
+        lead_time_median_days: 10
+      busy_professional:
+        share_start: 0.18
+        share_end: 0.25
+        home_size: [0.10, 0.30, 0.35, 0.18, 0.07]
+        distance: [0.60, 0.25, 0.15]
+        labor_only_prob: 0.10
+        lead_time_median_days: 21
+      family_upsizer:
+        share_start: 0.20
+        share_end: 0.19
+        home_size: [0.00, 0.05, 0.30, 0.40, 0.25]
+        distance: [0.70, 0.20, 0.10]
+        labor_only_prob: 0.10
+        lead_time_median_days: 28
+      student_renter:
+        share_start: 0.16
+        share_end: 0.14
+        home_size: [0.45, 0.40, 0.12, 0.03, 0.00]
+        distance: [0.75, 0.20, 0.05]
+        labor_only_prob: 0.35
+        lead_time_median_days: 5
+        season_multipliers: {summer: 1.6, winter: 0.7}
+      downsizer:
+        share_start: 0.10
+        share_end: 0.10
+        home_size: [0.00, 0.05, 0.20, 0.40, 0.35]
+        distance: [0.70, 0.20, 0.10]
+        labor_only_prob: 0.10
+        lead_time_median_days: 35
+      long_distance_relocator:
+        share_start: 0.08
+        share_end: 0.08
+        home_size: [0.10, 0.25, 0.30, 0.25, 0.10]
+        distance: [0.05, 0.25, 0.70]
+        labor_only_prob: 0.25
+        lead_time_median_days: 30
+    source_type: illustrative
+    source: >-
+      Archetypes from generic reasoning about who moves (students, families,
+      downsizers, ...). Shares, drift and season multipliers are illustrative
+      and exist so the test period differs from training.
+
+  segment_need_offsets:
+    # Latent "needs" per booking: diy_pack, pro_pack, protect, heavy, store.
+    value:
+      budget_diy:              {diy_pack: 0.6,  pro_pack: -1.2, protect: -0.4, heavy: 0.0,  store: -0.3}
+      busy_professional:       {diy_pack: -0.5, pro_pack: 1.2,  protect: 0.5,  heavy: 0.2,  store: 0.0}
+      family_upsizer:          {diy_pack: 0.5,  pro_pack: 0.1,  protect: 0.3,  heavy: 0.6,  store: 0.2}
+      student_renter:          {diy_pack: 0.3,  pro_pack: -1.5, protect: -0.6, heavy: -0.6, store: 0.5}
+      downsizer:               {diy_pack: 0.0,  pro_pack: 0.6,  protect: 0.5,  heavy: 0.4,  store: 1.0}
+      long_distance_relocator: {diy_pack: 0.1,  pro_pack: 0.4,  protect: 0.5,  heavy: 0.2,  store: 0.6}
+    source_type: illustrative
+    source: Generic reasoning about each archetype; magnitudes are arbitrary.
+
+  segment_service_boosts:
+    # Extra logit for specific services, NOT explained by the needs or by any
+    # observed feature. This is signal only collaborative filtering can find.
+    value:
+      budget_diy:              {tape_brown: 0.5}
+      busy_professional:       {wardrobe_box_25in: 0.8, tv_protector: 0.5}
+      family_upsizer:          {furniture_disassembly_reassembly: 0.6, large_appliance: 0.8}
+      student_renter:          {mattress_bag: 0.8, speed_pack_regular: 0.8, storage: 0.3}
+      downsizer:               {piano: 1.5, artwork: 1.5, unpacking: 0.5}
+      long_distance_relocator: {u_box_5x7: 1.0, plastic_wrap_15in: 0.5, gun_safe: 0.8}
+    source_type: illustrative
+    source: Arbitrary, chosen so hidden segments leave a trace in co-purchases.
+
+  # ---------------------------------------------------------------- move profile
+  access_type_probs:
+    # independently for origin and destination: ground, stairs, elevator
+    value: {ground: 0.45, stairs: 0.35, elevator: 0.20}
+    source_type: illustrative
+    source: Arbitrary mix; no data behind it.
+
+  distance_band_miles:
+    value: {local: [2, 49], regional: [50, 499], long_distance: [500, 2800]}
+    source_type: generic_reasoning
+    source: Common local / in-state / cross-country split. Miles drawn log-uniform within a band.
+
+  lead_time:
+    value: {lognormal_sigma: 0.6, long_distance_multiplier: 1.5, max_days: 120, short_lead_days: 7}
+    source_type: generic_reasoning
+    source: Long-distance moves are planned further ahead. Spread is illustrative.
+
+  # ---------------------------------------------------------------- needs model
+  need_feature_effects:
+    # Added to the latent needs. home_size_centered = index(studio=0..4br=4) - 2.
+    value:
+      home_size_centered: {diy_pack: 0.25, pro_pack: 0.20, protect: 0.15, heavy: 0.30, store: 0.10}
+      regional:           {pro_pack: 0.2, protect: 0.2, store: 0.2}
+      long_distance:      {pro_pack: 0.5, protect: 0.4, store: 0.6}
+      short_lead_time:    {pro_pack: -0.5}
+      summer:             {store: 0.3}
+      winter:             {protect: 0.3}
+      stairs_any:         {heavy: 0.3, protect: 0.2}
+    source_type: generic_reasoning
+    source: >-
+      Bigger homes and longer moves need more of everything; last-minute moves
+      leave less time to schedule packers; stairs make heavy items harder.
+      Magnitudes are illustrative.
+
+  need_noise_sigma:
+    value: 0.8
+    source_type: illustrative
+    source: Per-booking Gaussian noise on each latent need.
+
+  item_noise_sigma:
+    value: 0.5
+    source_type: illustrative
+    source: Per-booking, per-service Gaussian noise on the purchase logit.
+
+  # ---------------------------------------------------------------- catalog
+  catalog:
+    # Order matters: services are sampled top to bottom, and conditional
+    # effects may only depend on services listed earlier.
+    value:
+      - {group: truck, rule: exactly_one_if_truck_move, services: [truck_10ft, truck_16ft, truck_26ft]}
+      - {group: packing_service, services: [full_packing, unpacking, day_of_packing]}
+      - {group: boxes_wrap, services: [small_box, medium_box, large_box, bubble_wrap, dish_wrap]}
+      - {group: wardrobe_box, services: [wardrobe_box_20in, wardrobe_box_25in, wardrobe_box_25in_short]}
+      - {group: speed_pack, services: [speed_pack_regular, speed_pack_large]}
+      - {group: plastic_wrap, services: [plastic_wrap_13in, plastic_wrap_15in, plastic_wrap_17in]}
+      - {group: tape, services: [tape_clear, tape_brown]}
+      - {group: surface_protection, services: [floor_protector_paper, floor_protector_carpet, glass_protector, tv_protector, stairs_protector]}
+      - {group: equipment, services: [furniture_dolly, hand_truck_dolly, strap_elastic, strap_regular, strap_heavy_duty]}
+      - {group: furniture, services: [furniture_disassembly_reassembly]}
+      - {group: specialty, services: [piano, gun_safe, large_appliance, artwork, heavy_item_other]}
+      - {group: storage, rule: at_most_one, services: [storage_5x5, storage_5x10, storage_10x10, storage_10x15, storage_10x20]}
+      - {group: container, services: [u_box_5x7]}
+      - {group: other, services: [mattress_bag, store_pickup_delivery]}
+    source_type: user_spec
+    source: Service list given in the project spec (generic names; no prices).
+
+  free_services:
+    value: [furniture_dolly, hand_truck_dolly]
+    source_type: user_spec
+    source: Spec says both dollies are $0 line items (reminders, no revenue).
+    needs_public_source: true
+
+  # ---------------------------------------------------------------- purchase model
+  service_propensity:
+    # logit = base + sum(loads[need] * need) + boosts + effects + noise
+    # `storage` is one propensity for the whole storage group (size chosen after).
+    value:
+      full_packing:            {base: -2.5, loads: {pro_pack: 1.5}}
+      unpacking:               {base: -3.5, loads: {pro_pack: 1.0}}
+      day_of_packing:          {base: -2.5, loads: {pro_pack: 0.6, diy_pack: -0.3}}
+      small_box:               {base: -0.3, loads: {diy_pack: 1.0, pro_pack: -0.6}}
+      medium_box:              {base: 0.0,  loads: {diy_pack: 1.0, pro_pack: -0.6}}
+      large_box:               {base: -0.5, loads: {diy_pack: 0.9, pro_pack: -0.6}}
+      bubble_wrap:             {base: -1.5, loads: {diy_pack: 0.6, protect: 0.5}}
+      dish_wrap:               {base: -1.8, loads: {diy_pack: 0.7}}
+      wardrobe_box_20in:       {base: -2.8, loads: {diy_pack: 0.4, pro_pack: 0.4}}
+      wardrobe_box_25in:       {base: -2.3, loads: {diy_pack: 0.4, pro_pack: 0.5}}
+      wardrobe_box_25in_short: {base: -3.2, loads: {diy_pack: 0.4, pro_pack: 0.3}}
+      speed_pack_regular:      {base: -2.8, loads: {diy_pack: 0.6}}
+      speed_pack_large:        {base: -3.3, loads: {diy_pack: 0.5}}
+      plastic_wrap_13in:       {base: -3.0, loads: {protect: 0.6}}
+      plastic_wrap_15in:       {base: -2.4, loads: {protect: 0.7}}
+      plastic_wrap_17in:       {base: -3.0, loads: {protect: 0.6, heavy: 0.3}}
+      tape_clear:              {base: -1.8, loads: {diy_pack: 0.7}}
+      tape_brown:              {base: -2.5, loads: {diy_pack: 0.6}}
+      floor_protector_paper:   {base: -2.3, loads: {protect: 1.0}}
+      floor_protector_carpet:  {base: -2.8, loads: {protect: 0.9}}
+      glass_protector:         {base: -3.2, loads: {protect: 0.9}}
+      tv_protector:            {base: -2.5, loads: {protect: 0.8}}
+      stairs_protector:        {base: -2.5, loads: {protect: 0.8}}
+      furniture_dolly:         {base: -0.3, loads: {heavy: 0.5}}
+      hand_truck_dolly:        {base: -0.6, loads: {heavy: 0.5}}
+      strap_elastic:           {base: -2.8, loads: {heavy: 0.4}}
+      strap_regular:           {base: -2.4, loads: {heavy: 0.5}}
+      strap_heavy_duty:        {base: -3.0, loads: {heavy: 0.8}}
+      furniture_disassembly_reassembly: {base: -2.3, loads: {heavy: 0.7, pro_pack: 0.4}}
+      piano:                   {base: -5.0, loads: {heavy: 0.8}}
+      gun_safe:                {base: -5.0, loads: {heavy: 0.8}}
+      large_appliance:         {base: -3.8, loads: {heavy: 0.8}}
+      artwork:                 {base: -4.5, loads: {protect: 0.6, heavy: 0.3}}
+      heavy_item_other:        {base: -4.0, loads: {heavy: 1.0}}
+      storage:                 {base: -2.2, loads: {store: 1.2}}
+      u_box_5x7:               {base: -4.0, loads: {store: 0.8}}
+      mattress_bag:            {base: -1.8, loads: {protect: 0.4}}
+      store_pickup_delivery:   {base: -3.5, loads: {store: 0.5}}
+    source_type: illustrative
+    source: >-
+      Base rates and loadings are arbitrary, set only so that common supplies
+      are common and specialty items are rare. They do not mirror any real
+      company's attach rates.
+
+  feature_effects:
+    # Direct logit shifts from observed features. Conditions are defined in
+    # generator.CONDITIONS.
+    value:
+      - {service: day_of_packing,   condition: short_lead_time, delta: 1.0}
+      - {service: stairs_protector, condition: no_stairs,       delta: -4.0}
+      - {service: furniture_dolly,  condition: labor_only,      delta: -1.5}
+      - {service: hand_truck_dolly, condition: labor_only,      delta: -1.5}
+      - {service: u_box_5x7,        condition: labor_only,      delta: 1.5}
+      - {service: u_box_5x7,        condition: long_distance,   delta: 1.2}
+    source_type: generic_reasoning
+    source: >-
+      Last-minute movers need day-of help; stair protection needs stairs;
+      labor-only crews bring their own dollies; containers suit people without
+      a truck and long DIY moves. Magnitudes are illustrative.
+
+  conditional_effects:
+    # If the booking already has ANY of `if_any`, shift the logit of `then`.
+    # `storage` means any storage unit.
+    value:
+      - {then: unpacking,             if_any: [full_packing], delta: 2.5}
+      - {then: day_of_packing,        if_any: [full_packing], delta: -3.0}
+      - {then: dish_wrap,             if_any: [small_box, medium_box, large_box], delta: 0.8}
+      - {then: tape_clear,            if_any: [small_box, medium_box, large_box], delta: 1.5}
+      - {then: tape_brown,            if_any: [small_box, medium_box, large_box], delta: 1.2}
+      - {then: mattress_bag,          if_any: [storage], delta: 0.8}
+      - {then: store_pickup_delivery, if_any: [storage], delta: 1.5}
+    source_type: generic_reasoning
+    source: >-
+      Boxes need tape; full packing makes day-of packing redundant and makes
+      unpacking more likely; stored mattresses get bagged. Magnitudes are
+      illustrative.
+
+  truck_size_by_home_size:
+    # rows: studio..4br_plus; columns: truck_10ft, truck_16ft, truck_26ft
+    value:
+      studio:   [0.85, 0.15, 0.00]
+      1br:      [0.65, 0.33, 0.02]
+      2br:      [0.15, 0.70, 0.15]
+      3br:      [0.03, 0.40, 0.57]
+      4br_plus: [0.00, 0.15, 0.85]
+    source_type: public
+    source: >-
+      Public truck-rental size guides map roughly 10ft to studio/1BR, 15-17ft
+      to 1-2BR, 20ft to 2-3BR and 26ft to 3-5BR. Planned cross-check: the
+      public Kaggle U-Haul rental-rates dataset. Off-diagonal mass is
+      illustrative noise.
+    verified: false
+
+  storage_size_by_home_size:
+    # rows: studio..4br_plus; columns: 5x5, 5x10, 10x10, 10x15, 10x20
+    value:
+      studio:   [0.40, 0.50, 0.10, 0.00, 0.00]
+      1br:      [0.10, 0.50, 0.35, 0.05, 0.00]
+      2br:      [0.00, 0.20, 0.50, 0.25, 0.05]
+      3br:      [0.00, 0.05, 0.25, 0.45, 0.25]
+      4br_plus: [0.00, 0.00, 0.10, 0.35, 0.55]
+    source_type: public
+    source: >-
+      Public self-storage size guides: 5x5 is about a closet, 5x10 a studio,
+      10x10 a 1-2BR, 10x15 a 2-3BR, 10x20 a 3-4BR. Spread allows for storing
+      only part of a home.
+    verified: false
+
+  storage_months:
+    value: {geometric_p: 0.25, max_months: 24}
+    source_type: illustrative
+    source: Mean about 4 months with a long tail. No data behind it.
+
+  quantities:
+    value:
+      boxes_total_mean_by_home_size: [12, 20, 35, 50, 70]
+      box_split: {small_box: 0.4, medium_box: 0.4, large_box: 0.2}
+      tape_rolls_per_home_size_step: 0.5
+    source_type: illustrative
+    source: Rough box counts per home size. Quantities don't affect the (binary) recommender.
+
+  # ---------------------------------------------------------------- noise
+  basket_noise:
+    value: {random_add_prob: 0.04, random_drop_prob: 0.03}
+    source_type: illustrative
+    source: >-
+      Random add = one uniformly random non-truck, non-storage service (makes
+      rare combinations). Random drop = one item removed (abandoned add-on).
+
+  # ---------------------------------------------------------------- documentation only
+  business_rules_not_simulated:
+    value:
+      specialty_fee: Specialty items carry a fee per 3 items.
+      storage_free_month: Storage longer than 6 months gets the first month free.
+    source_type: user_spec
+    source: Given in the project spec. Not used by the generator (no prices are simulated).
+    used_by: documentation_only
+    needs_public_source: true
